@@ -2,12 +2,16 @@
 
 #include <xitren/math/branchless.hpp>
 
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fstream>
+#include <iostream>
 #include <vector>
 
 namespace xitren::math {
@@ -73,14 +77,41 @@ public:
     inline matrix_strassen
     operator*(matrix_strassen const& other) const
     {
-        auto const H1 = (a_ + d_) * (other.a_ + other.d_);
-        auto const H2 = (c_ + d_) * other.a_;
-        auto const H3 = a_ * (other.b_ - other.d_);
-        auto const H4 = d_ * (other.c_ - other.a_);
-        auto const H5 = (a_ + b_) * other.d_;
-        auto const H6 = (c_ - a_) * (other.a_ + other.b_);
-        auto const H7 = (b_ - d_) * (other.c_ + other.d_);
-        return matrix_strassen{H1 + H4 - H5 + H7, H3 + H5, H2 + H4, H1 + H3 - H2 + H6};
+        if constexpr (Size >= 64) {
+            std::array<std::function<quarter_type(void)>, 7> funcs{
+                {{[&]() -> quarter_type { return (a_ + d_) * (other.a_ + other.d_); }},
+                 {[&]() -> quarter_type { return (c_ + d_) * other.a_; }},
+                 {[&]() -> quarter_type { return a_ * (other.b_ - other.d_); }},
+                 {[&]() -> quarter_type { return d_ * (other.c_ - other.a_); }},
+                 {[&]() -> quarter_type { return (a_ + b_) * other.d_; }},
+                 {[&]() -> quarter_type { return (c_ - a_) * (other.a_ + other.b_); }},
+                 {[&]() -> quarter_type { return (b_ - d_) * (other.c_ + other.d_); }}}};
+            std::array<quarter_type, 7> H;
+
+#pragma omp parallel for
+            for (std::size_t i = 0; i < 7; i++) {
+                H[i] = (funcs[i])();
+            }
+
+            auto const Q1 = H[0] + H[3] - H[4] + H[6];
+            auto const Q2 = H[2] + H[4];
+            auto const Q3 = H[1] + H[3];
+            auto const Q4 = H[0] + H[2] - H[1] + H[5];
+            return matrix_strassen{Q1, Q2, Q3, Q4};
+        } else {
+            auto const H1 = (a_ + d_) * (other.a_ + other.d_);
+            auto const H2 = (c_ + d_) * other.a_;
+            auto const H3 = a_ * (other.b_ - other.d_);
+            auto const H4 = d_ * (other.c_ - other.a_);
+            auto const H5 = (a_ + b_) * other.d_;
+            auto const H6 = (c_ - a_) * (other.a_ + other.b_);
+            auto const H7 = (b_ - d_) * (other.c_ + other.d_);
+            auto const Q1 = H1 + H4 - H5 + H7;
+            auto const Q2 = H3 + H5;
+            auto const Q3 = H2 + H4;
+            auto const Q4 = H1 + H3 - H2 + H6;
+            return matrix_strassen{Q1, Q2, Q3, Q4};
+        }
     }
 
     inline matrix_strassen

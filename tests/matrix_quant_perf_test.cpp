@@ -68,50 +68,82 @@ matrix_test(std::string name, measurement base, std::function<void(void)> callba
 
 template <std::size_t Size>
 void
-test_sized_matrix()
+test_sized_int32_matrix()
 {
     constexpr std::size_t size = Size;
     std::cout << "\nMatrix C = A * B size:\t" << size << std::endl;
 
-    auto A = matrix_classic<double, size, size>::get_rand_matrix(0., 1.);
-    auto B = matrix_classic<double, size, size>::get_rand_matrix(0., 1.);
-    auto C = matrix_classic<double, size, size>::get_rand_matrix(0., 1.);
+    auto A = matrix_classic<std::int32_t, size, size>::get_rand_matrix(0., 1.);
+    auto B = matrix_classic<std::int32_t, size, size>::get_rand_matrix(0., 1.);
+    auto C = matrix_classic<std::int32_t, size, size>::get_rand_matrix(0., 1.);
 
     auto base = matrix_test("Naive   ", measurement{0, 0}, [&]() { A->mult(*B, *C); });
-    matrix_test("Blocked ", base, [&]() { matrix_mult_basic_blocked(*A, *B, *C); });
 
-    auto Aal = matrix_aligned<double, size, size>::get_rand_matrix(0., 1.);
-    auto Bal = matrix_aligned<double, size, size>::get_rand_matrix(0., 1.);
-    auto Cal = matrix_aligned<double, size, size>::get_rand_matrix(0., 1.);
-
-    matrix_test("AVX256  ", base, [&]() { matrix_aligned<double, size, size>::mult_256(*Aal, *Bal, *Cal); });
-    matrix_test("AVX512  ", base, [&]() { matrix_aligned<double, size, size>::mult_512(*Aal, *Bal, *Cal); });
-    matrix_test("Unrolled", base, [&]() { matrix_aligned<double, size, size>::mult_unrolled(*Aal, *Bal, *Cal); });
-    matrix_test("OpenMP  ", base, [&]() { matrix_aligned<double, size, size>::mult_openmp(*Aal, *Bal, *Cal); });
-
-    using loc_type_eigen = Eigen::MatrixXd;
-    auto   mAe           = loc_type_eigen::Random(size, size);
-    auto   mBe           = loc_type_eigen::Random(size, size);
-    double it{};
+    using loc_type_eigen = Eigen::Matrix<std::int32_t, Eigen::Dynamic, Eigen::Dynamic>;
+    auto         mAe     = loc_type_eigen::Random(size, size);
+    auto         mBe     = loc_type_eigen::Random(size, size);
+    std::int32_t it{};
     matrix_test("Eigen   ", base, [&]() {
         auto mCe = mAe * mBe;
         it += mCe(0, 0);
     });
 
     if constexpr (Size < 256) {
-        static auto Ast = matrix_strassen<double, size>::get_rand_matrix();
-        static auto Bst = matrix_strassen<double, size>::get_rand_matrix();
-        static auto Cst = matrix_strassen<double, size>::get_rand_matrix();
+        static auto Ast = matrix_strassen<std::int32_t, size>::get_rand_matrix();
+        static auto Bst = matrix_strassen<std::int32_t, size>::get_rand_matrix();
+        static auto Cst = matrix_strassen<std::int32_t, size>::get_rand_matrix();
         matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
     }
 }
 
-TEST(matrix_perf_test, usual)
+template <std::size_t Size>
+void
+test_sized_int8_matrix()
 {
-    test_sized_matrix<32>();
-    test_sized_matrix<64>();
-    test_sized_matrix<128>();
-    test_sized_matrix<256>();
-    test_sized_matrix<512>();
-    test_sized_matrix<1024>();
+    constexpr std::size_t size = Size;
+    std::cout << "\nMatrix C = A * B size:\t" << size << std::endl;
+
+    auto A = matrix_classic<std::int8_t, size, size>::get_rand_matrix(0., 1.);
+    auto B = matrix_classic<std::int8_t, size, size>::get_rand_matrix(0., 1.);
+    auto C = matrix_classic<std::int8_t, size, size>::get_rand_matrix(0., 1.);
+
+    auto base = matrix_test("Naive   ", measurement{0, 0}, [&]() { A->mult(*B, *C); });
+
+    using loc_type_eigen = Eigen::Matrix<std::int8_t, Eigen::Dynamic, Eigen::Dynamic>;
+    auto        mAe      = loc_type_eigen::Random(size, size);
+    auto        mBe      = loc_type_eigen::Random(size, size);
+    std::int8_t it{};
+    matrix_test("Eigen   ", base, [&]() {
+        auto mCe = mAe * mBe;
+        it += mCe(0, 0);
+    });
+
+    if constexpr (Size < 256) {
+        static auto Ast = matrix_strassen<std::int8_t, size>::get_rand_matrix();
+        static auto Bst = matrix_strassen<std::int8_t, size>::get_rand_matrix();
+        static auto Cst = matrix_strassen<std::int8_t, size>::get_rand_matrix();
+        matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
+    }
+}
+
+TEST(matrix_quant_int32_perf_test, usual)
+{
+    test_sized_int32_matrix<4>();
+    test_sized_int32_matrix<8>();
+    test_sized_int32_matrix<16>();
+    test_sized_int32_matrix<32>();
+    test_sized_int32_matrix<64>();
+    test_sized_int32_matrix<128>();
+    test_sized_int32_matrix<256>();
+}
+
+TEST(matrix_quant_int8_perf_test, usual)
+{
+    test_sized_int8_matrix<4>();
+    test_sized_int8_matrix<8>();
+    test_sized_int8_matrix<16>();
+    test_sized_int8_matrix<32>();
+    test_sized_int8_matrix<64>();
+    test_sized_int8_matrix<128>();
+    test_sized_int8_matrix<256>();
 }

@@ -20,6 +20,8 @@ set(EIGEN_BUILD_DOC OFF)
 set(BUILD_TESTING OFF)
 FetchContent_MakeAvailable(Eigen3)
 
+find_package(OpenMP REQUIRED)
+
 include(GoogleTest)
 
 file(GLOB TESTS *.cpp)
@@ -31,11 +33,11 @@ foreach (file ${TESTS})
     target_compile_features(${tgt} PUBLIC cxx_std_20)
     if (NOT ${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
         target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wpedantic -Wc++20-compat -Wno-format-security
-                -Woverloaded-virtual -Wsuggest-override)
+                -Woverloaded-virtual -Wsuggest-override -DEIGEN_DONT_VECTORIZE -fopenmp -Ofast)
     else()
         target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wpedantic -Wc++20-compat -Wno-format-security
-                -Woverloaded-virtual -Wsuggest-override)
+                -Woverloaded-virtual -Wsuggest-override -DEIGEN_DONT_VECTORIZE -fopenmp -Ofast)
     endif ()
-    target_link_libraries(${tgt} PRIVATE ${LIBRARY_NAME} GTest::gtest GTest::GTest Eigen3::Eigen -pthread)
+    target_link_libraries(${tgt} PRIVATE ${LIBRARY_NAME} GTest::gtest GTest::GTest Eigen3::Eigen OpenMP::OpenMP_CXX -pthread)
     gtest_discover_tests(${tgt} WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach ()

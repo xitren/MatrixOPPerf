@@ -11,9 +11,5 @@
 #include <memory>
 #include <utility>
 #include <vector>
-#include <xitren/simd/operations.h++>
 
-namespace xitren::simd {
-
-
-}  // namespace xitren::simd
+namespace xitren::simd {}    // namespace xitren::simd

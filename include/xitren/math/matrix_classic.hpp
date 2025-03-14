@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <memory>
+#include <random>
 #include <vector>
 
 namespace xitren::math {
@@ -92,17 +94,20 @@ public:
         }
     }
 
-    static matrix_classic
-    get_rand_matrix()
+    static std::shared_ptr<matrix_classic>
+    get_rand_matrix(double max_val, double min_val)
     {
+        std::shared_ptr<matrix_classic>  ret = std::make_shared<matrix_classic>();
+        std::random_device               rd;
+        std::mt19937                     gen(rd());
+        std::uniform_real_distribution<> dis(min_val, max_val);
         std::srand(std::time({}));    // use current time as seed for random generator
-        data_type data_rand;
-        for (auto it{data_rand.begin()}; it != data_rand.end(); it++) {
+        for (auto it{ret->begin()}; it != ret->end(); it++) {
             for (auto it2{(*it).begin()}; it2 != ((*it).end()); it2++) {
-                (*it2) = static_cast<Type>(std::rand());
+                (*it2) = static_cast<Type>(dis(gen));
             }
         }
-        return matrix_classic{data_rand};
+        return ret;
     }
 };
 
