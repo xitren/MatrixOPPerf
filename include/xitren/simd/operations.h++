@@ -1,5 +1,9 @@
 #pragma once
 
+#include <xitren/math/matrix_classic.hpp>
+
+#include <x86intrin.h>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -11,26 +15,8 @@
 #include <memory>
 #include <utility>
 #include <vector>
-#include <x86intrin.h>
 
 namespace xitren::simd {
-
-
-template <std::size_t Size>
-void matrix_mult_basic(const std::array<double, Size>& A,
-                       const std::array<double, Size>& B,
-                       std::array<double, Size>& C) {
-    constexpr uint32_t n = Size/2;
-    for (uint32_t i = 0; i < n; ++i) {
-        for (uint32_t j = 0; j < n; ++j) {
-            double cij = C[i + j * n]; /* cij = C[i][j] */
-            for (uint32_t k = 0; k < n; k++) {
-                cij += A[i + k * n] * B[k + j * n]; /* cij += A[i][k]*B[k][j] */
-            }
-            C[i + j * n] = cij; /* C[i][j] = cij */
-        }
-    }
-}
 
 /*
 Assume matrix C is initialized to zero. The `do_block` function is basic
@@ -78,28 +64,33 @@ program, which again improves performance.
 static constexpr uint32_t BLOCKSIZE = 32;
 
 template <std::size_t Size>
-static void do_block(const uint32_t n, const uint32_t si, const uint32_t sj,
-                     const uint32_t sk, const std::array<double, Size>& A,
-                     const std::array<double, Size>& B,
-                     std::array<double, Size>& C) {
+static void
+do_block(const uint32_t n, const uint32_t si, const uint32_t sj, const uint32_t sk,
+         xitren::math::matrix_classic<double, Size, Size> const& A,
+         xitren::math::matrix_classic<double, Size, Size> const& B, xitren::math::matrix_classic<double, Size, Size>& C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
+    static_assert(Size >= BLOCKSIZE, "Should be than BLOCKSIZE!");
     for (uint32_t i = si; i < si + BLOCKSIZE; ++i) {
         for (uint32_t j = sj; j < sj + BLOCKSIZE; ++j) {
-            double cij = C[i + j * n]; /* cij = C[i][j] */
+            double cij = C[i][j];         /* cij = C[i][j] */
             for (uint32_t k = sk; k < sk + BLOCKSIZE; k++) {
-                cij += A[i + k * n] * B[k + j * n]; /* cij+=A[i][k]*B[k][j] */
+                cij += A[i][k] * B[k][j]; /* cij+=A[i][k]*B[k][j] */
             }
-            C[i + j * n] = cij; /* C[i][j] = cij */
+            C[i][j] = cij;                /* C[i][j] = cij */
         }
     }
 }
 
 template <std::size_t Size>
-void matrix_mult_basic_blocked(const std::array<double, Size>& A,
-                               const std::array<double, Size>& B,
-                               std::array<double, Size>& C) {
+void
+matrix_mult_basic_blocked(xitren::math::matrix_classic<double, Size, Size> const& A,
+                          xitren::math::matrix_classic<double, Size, Size> const& B,
+                          xitren::math::matrix_classic<double, Size, Size>&       C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
-    constexpr uint32_t n = Size/2;
+    static_assert(Size >= BLOCKSIZE, "Should be than BLOCKSIZE!");
+    constexpr uint32_t n = Size;
     for (uint32_t sj = 0; sj < n; sj += BLOCKSIZE) {
         for (uint32_t si = 0; si < n; si += BLOCKSIZE) {
             for (uint32_t sk = 0; sk < n; sk += BLOCKSIZE) {
@@ -108,7 +99,6 @@ void matrix_mult_basic_blocked(const std::array<double, Size>& A,
         }
     }
 }
-
 
 /*
 The declaration uses the __m256d datatype, which tells the compiler the variable
@@ -136,19 +126,17 @@ which is very close to the factor of 4.0 increase that you might hope for from
 performing four times as many operations at a time by using subword parallelism.
 */
 template <std::size_t Size>
-void matrix_mult_avx256(const std::array<double, Size>& A,
-                        const std::array<double, Size>& B,
-                        std::array<double, Size>& C) {
+void
+matrix_mult_avx256(std::array<double, Size> const& A, std::array<double, Size> const& B, std::array<double, Size>& C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
-    constexpr uint32_t n = Size/2;
+    constexpr uint32_t n = Size / 2;
     for (uint32_t i = 0; i < n; i += 4) {
         for (uint32_t j = 0; j < n; j++) {
             __m256d c0 = _mm256_load_pd(C + i + j * n); /* c0 = C[i][j] */
             for (uint32_t k = 0; k < n; k++) {
-                c0 = _mm256_add_pd(
-                    c0, /* c0 += A[i][k]*B[k][j] */
-                    _mm256_mul_pd(_mm256_load_pd(A + i + k * n),
-                                  _mm256_broadcast_sd(B + k + j * n)));
+                c0 = _mm256_add_pd(c0,                  /* c0 += A[i][k]*B[k][j] */
+                                   _mm256_mul_pd(_mm256_load_pd(A + i + k * n), _mm256_broadcast_sd(B + k + j * n)));
             }
 
             _mm256_store_pd(C + i + j * n, c0); /* C[i][j] = c0 */
@@ -185,20 +173,20 @@ products to the 8 sums in c0.
 
 */
 template <std::size_t Size>
-void matrix_mult_avx512(const std::array<double, Size>& A,
-                        const std::array<double, Size>& B,
-                        std::array<double, Size>& C) {
+void
+matrix_mult_avx512(std::array<double, Size> const& A, std::array<double, Size> const& B, std::array<double, Size>& C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
-    constexpr uint32_t n = Size/2;
+    constexpr uint32_t n = Size / 2;
     for (uint32_t i = 0; i < n; i += 8) {
         for (uint32_t j = 0; j < n; ++j) {
-            __m512d c0 = _mm512_load_pd(C + i + j * n);  // c0 = C[i][j]
+            __m512d c0 = _mm512_load_pd(C.data() + i + j * n);    // c0 = C[i][j]
             for (uint32_t k = 0; k < n; k++) {
                 // c0 += A[i][k] * B[k][j]
-                __m512d bb = _mm512_broadcastsd_pd(_mm_load_sd(B + j * n + k));
-                c0 = _mm512_fmadd_pd(_mm512_load_pd(A + n * k + i), bb, c0);
+                __m512d bb = _mm512_broadcastsd_pd(_mm_load_sd(B.data() + j * n + k));
+                c0         = _mm512_fmadd_pd(_mm512_load_pd(A.data() + n * k + i), bb, c0);
             }
-            _mm512_store_pd(C + i + j * n, c0);  // C[i][j] = c0
+            _mm512_store_pd(C.data() + i + j * n, c0);    // C[i][j] = c0
         }
     }
 }
@@ -209,31 +197,30 @@ subword-parallel instructions for the x86 and loop unrolling to create more
 opportunities for instruction-level parallelism.
 
 We can see the impact of
-instruction-level parallelism by unrolling the loop so that the multiple-issue,
-out-of-order execution processor has more instructions to work with.
-The function below is the unrolled version of function avx512, which contains
-the C intrinsics to produce the AVX-512 instructions.
+instruction-level parallelism by unrolling the loop so that the
+multiple-issue, out-of-order execution processor has more instructions to
+work with. The function below is the unrolled version of function avx512,
+which contains the C intrinsics to produce the AVX-512 instructions.
 */
 template <std::size_t Size>
-void matrix_mult_unrolled(const std::array<double, Size>& A,
-                          const std::array<double, Size>& B,
-                          std::array<double, Size>& C) {
+void
+matrix_mult_unrolled(std::array<double, Size> const& A, std::array<double, Size> const& B, std::array<double, Size>& C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
     constexpr uint32_t UNROLL = 4;
-    constexpr uint32_t n = Size/2;
+    constexpr uint32_t n      = Size / 2;
 
     for (uint32_t i = 0; i < n; i += UNROLL * 8) {
         for (uint32_t j = 0; j < n; ++j) {
             __m512d c[UNROLL];
             for (uint32_t r = 0; r < UNROLL; r++) {
-                c[r] = _mm512_load_pd(C.data() + i + r * 8 + j * n);  //[ UNROLL];
+                c[r] = _mm512_load_pd(C.data() + i + r * 8 + j * n);    //[UNROLL];
             }
 
             for (uint32_t k = 0; k < n; k++) {
                 __m512d bb = _mm512_broadcastsd_pd(_mm_load_sd(B.data() + j * n + k));
                 for (uint32_t r = 0; r < UNROLL; r++) {
-                    c[r] = _mm512_fmadd_pd(
-                        _mm512_load_pd(A.data() + n * k + r * 8 + i), bb, c[r]);
+                    c[r] = _mm512_fmadd_pd(_mm512_load_pd(A.data() + n * k + r * 8 + i), bb, c[r]);
                 }
             }
             for (uint32_t r = 0; r < UNROLL; r++) {
@@ -245,30 +232,30 @@ void matrix_mult_unrolled(const std::array<double, Size>& A,
 
 /*
 Optimized version of DGEMM using C intrinsics to generate the AVX
-subword-parallel instructions for the x86, loop unrolling and blocking to create
-more opportunities for instruction-level parallelism.
+subword-parallel instructions for the x86, loop unrolling and blocking to
+create more opportunities for instruction-level parallelism.
 */
 
 template <std::size_t Size>
-static void do_block_simd(const uint32_t n, const uint32_t si, const uint32_t sj,
-                     const uint32_t sk, const std::array<double, Size>& A,
-                     const std::array<double, Size>& B,
-                     std::array<double, Size>& C) {
+static void
+do_block_simd(const uint32_t n, const uint32_t si, const uint32_t sj, const uint32_t sk,
+              std::array<double, Size> const& A, std::array<double, Size> const& B, std::array<double, Size>& C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
+    static_assert(Size >= BLOCKSIZE, "Should be than BLOCKSIZE!");
     constexpr uint32_t UNROLL = 4;
 
     for (uint32_t i = si; i < si + BLOCKSIZE; i += UNROLL * 8) {
         for (uint32_t j = sj; j < sj + BLOCKSIZE; ++j) {
             __m512d c[UNROLL];
             for (uint32_t r = 0; r < UNROLL; r++) {
-                c[r] = _mm512_load_pd(C.data() + i + r * 8 + j * n);  //[ UNROLL];
+                c[r] = _mm512_load_pd(C.data() + i + r * 8 + j * n);    //[UNROLL];
             }
 
             for (uint32_t k = sk; k < sk + BLOCKSIZE; k++) {
                 __m512d bb = _mm512_broadcastsd_pd(_mm_load_sd(B.data() + j * n + k));
                 for (uint32_t r = 0; r < UNROLL; r++) {
-                    c[r] = _mm512_fmadd_pd(
-                        _mm512_load_pd(A.data() + n * k + r * 8 + i), bb, c[r]);
+                    c[r] = _mm512_fmadd_pd(_mm512_load_pd(A.data() + n * k + r * 8 + i), bb, c[r]);
                 }
             }
             for (uint32_t r = 0; r < UNROLL; r++) {
@@ -279,11 +266,12 @@ static void do_block_simd(const uint32_t n, const uint32_t si, const uint32_t sj
 }
 
 template <std::size_t Size>
-void matrix_mult_openmp(const std::array<double, Size>& A,
-                        const std::array<double, Size>& B,
-                        std::array<double, Size>& C) {
+void
+matrix_mult_openmp(std::array<double, Size> const& A, std::array<double, Size> const& B, std::array<double, Size>& C)
+{
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
-    constexpr uint32_t n = Size/2;
+    static_assert(Size >= BLOCKSIZE, "Should be than BLOCKSIZE!");
+    constexpr uint32_t n = Size / 2;
 #pragma omp parallel for
     for (uint32_t sj = 0; sj < n; sj += BLOCKSIZE) {
         for (uint32_t si = 0; si < n; si += BLOCKSIZE) {
@@ -294,4 +282,4 @@ void matrix_mult_openmp(const std::array<double, Size>& A,
     }
 }
 
-}  // namespace xitren::simd
+}    // namespace xitren::simd
