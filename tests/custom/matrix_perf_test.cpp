@@ -48,7 +48,7 @@ matrix_test(std::string name, measurement base, std::function<void(void)> callba
         auto        start_time{std::chrono::system_clock::now()};
         auto        last_time{std::chrono::system_clock::now()};
         while ((last_time - start_time) <= period_) {
-            for (std ::size_t i{}; i < 100; i++, cnt++) {
+            for (std ::size_t i{}; i < 1; i++, cnt++) {
                 callback();
             }
             last_time = std::chrono::system_clock::now();
@@ -98,12 +98,12 @@ test_sized_matrix()
         it += mCe(0, 0);
     });
 
-    if constexpr (Size < 256) {
-        static auto Ast = matrix_strassen<double, size>::get_rand_matrix();
-        static auto Bst = matrix_strassen<double, size>::get_rand_matrix();
-        static auto Cst = matrix_strassen<double, size>::get_rand_matrix();
-        matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
-    }
+    // if constexpr (Size < 256) {
+    //     static auto Ast = matrix_strassen<double, size>::get_rand_matrix();
+    //     static auto Bst = matrix_strassen<double, size>::get_rand_matrix();
+    //     static auto Cst = matrix_strassen<double, size>::get_rand_matrix();
+    //     matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
+    // }
 }
 
 TEST(matrix_perf_test, usual)
@@ -114,4 +114,7 @@ TEST(matrix_perf_test, usual)
     test_sized_matrix<256>();
     test_sized_matrix<512>();
     test_sized_matrix<1024>();
+    test_sized_matrix<2048>();
+    test_sized_matrix<4096>();
+    test_sized_matrix<8192>();
 }
