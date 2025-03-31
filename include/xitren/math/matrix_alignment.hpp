@@ -1,6 +1,6 @@
 #pragma once
 
-#include <xitren/simd/operations.h++>
+#include <xitren/math/gemm_core.hpp>
 
 #include <x86intrin.h>
 
@@ -17,7 +17,7 @@
 
 namespace xitren::math {
 
-template <class Type, std::size_t Rows, std::size_t Columns>
+template <class Type, std::size_t Rows, std::size_t Columns, xitren::math::optimization Alg>
 class matrix_aligned {
 
 public:
@@ -29,36 +29,19 @@ public:
     }
     ~matrix_aligned() { _mm_free(data_); }
 
+    template <std::size_t ColumnsOther>
     static void
-    mult_256(matrix_aligned const& A, matrix_aligned const& B, matrix_aligned& C)
+    mult(matrix_aligned<Type, Rows, ColumnsOther, Alg> const&    a,
+         matrix_aligned<Type, ColumnsOther, Columns, Alg> const& b, matrix_aligned<Type, Rows, Columns, Alg>& c)
     {
-        static_assert((Rows & (Rows - 1)) == 0, "Should be power of 2!");
-        static_assert(Rows == Columns);
-        xitren::simd::matrix_mult_avx256(Rows, A.data_, B.data_, C.data_);
+        using Core = xitren::math::gemm_core<Rows, ColumnsOther, Columns, Type, Alg>;
+        Core::mult(a.data_, b.data_, c.data_);
     }
 
-    static void
-    mult_512(matrix_aligned const& A, matrix_aligned const& B, matrix_aligned& C)
+    auto&
+    get(std::size_t row, std::size_t column)
     {
-        static_assert((Rows & (Rows - 1)) == 0, "Should be power of 2!");
-        static_assert(Rows == Columns);
-        xitren::simd::matrix_mult_avx512(Rows, A.data_, B.data_, C.data_);
-    }
-
-    static void
-    mult_unrolled(matrix_aligned const& A, matrix_aligned const& B, matrix_aligned& C)
-    {
-        static_assert((Rows & (Rows - 1)) == 0, "Should be power of 2!");
-        static_assert(Rows == Columns);
-        xitren::simd::matrix_mult_avx512(Rows, A.data_, B.data_, C.data_);
-    }
-
-    static void
-    mult_openmp(matrix_aligned const& A, matrix_aligned const& B, matrix_aligned& C)
-    {
-        static_assert((Rows & (Rows - 1)) == 0, "Should be power of 2!");
-        static_assert(Rows == Columns);
-        xitren::simd::matrix_mult_openmp(Rows, A.data_, B.data_, C.data_);
+        return data_[(row * Columns) + column];
     }
 
     static std::shared_ptr<matrix_aligned>
@@ -74,8 +57,9 @@ public:
         return ret;
     }
 
+    Type* data_{nullptr};
+
 private:
-    double* data_{nullptr};
 };
 
 }    // namespace xitren::math

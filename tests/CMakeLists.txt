@@ -34,11 +34,11 @@ foreach (file ${TESTS})
     target_compile_features(${tgt} PUBLIC cxx_std_20)
     if (NOT ${CMAKE_HOST_SYSTEM_NAME} MATCHES "Windows")
         target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wpedantic -Wc++20-compat -Wno-format-security
-                -Woverloaded-virtual -Wsuggest-override -fopenmp
+                -Woverloaded-virtual -Wsuggest-override -fopenmp -DEIGEN_DONT_VECTORIZE
                 -O0 -fargument-noalias)
     else()
         target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wpedantic -Wc++20-compat -Wno-format-security
-                -Woverloaded-virtual -Wsuggest-override -fopenmp
+                -Woverloaded-virtual -Wsuggest-override -fopenmp -DEIGEN_DONT_VECTORIZE
                 -O0 -fargument-noalias)
     endif ()
     target_link_libraries(${tgt} PRIVATE ${LIBRARY_NAME} GTest::gtest GTest::GTest Eigen3::Eigen OpenMP::OpenMP_CXX -pthread)

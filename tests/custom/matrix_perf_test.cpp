@@ -61,7 +61,7 @@ matrix_test(std::string name, measurement base, std::function<void(void)> callba
         double const in{static_cast<double>(base.cycles) / static_cast<double>(base.us)};
         double const out{static_cast<double>(calc_time.cycles) / static_cast<double>(calc_time.us)};
         std::cout << name << "\tTime:\t" << calc_time.us << "\tCycles:\t" << calc_time.cycles << "\tx"
-                  << static_cast<int>(out / in) << std::endl;
+                  << static_cast<int>(out / in) << "." << ((static_cast<int>(out * 10 / in)) % 10) << std::endl;
     }
     return calc_time;
 }
@@ -98,12 +98,12 @@ test_sized_matrix()
         it += mCe(0, 0);
     });
 
-    // if constexpr (Size < 256) {
-    //     static auto Ast = matrix_strassen<double, size>::get_rand_matrix();
-    //     static auto Bst = matrix_strassen<double, size>::get_rand_matrix();
-    //     static auto Cst = matrix_strassen<double, size>::get_rand_matrix();
-    //     matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
-    // }
+    if constexpr (Size < 256) {
+        static auto Ast = matrix_strassen<double, size>::get_rand_matrix();
+        static auto Bst = matrix_strassen<double, size>::get_rand_matrix();
+        static auto Cst = matrix_strassen<double, size>::get_rand_matrix();
+        matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
+    }
 }
 
 TEST(matrix_perf_test, usual)
@@ -117,4 +117,6 @@ TEST(matrix_perf_test, usual)
     test_sized_matrix<2048>();
     test_sized_matrix<4096>();
     test_sized_matrix<8192>();
+    test_sized_matrix<16384>();
+    test_sized_matrix<32768>();
 }

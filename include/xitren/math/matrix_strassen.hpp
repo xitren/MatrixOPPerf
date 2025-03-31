@@ -2,6 +2,8 @@
 
 #include <xitren/math/branchless.hpp>
 
+#include <x86intrin.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -11,22 +13,51 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
-#include <iostream>
+#include <functional>
 #include <vector>
 
 namespace xitren::math {
+
+template <class T>
+struct custom_allocator {
+    static constexpr std::size_t align = 64;
+
+    using value_type            = T;
+    custom_allocator() noexcept = default;
+
+    template <class U>
+    custom_allocator(custom_allocator<U> const&) noexcept
+    {}
+
+    T*
+    allocate(std::size_t n)
+    {
+        return (T*)_mm_malloc(n * sizeof(T), align);
+    }
+
+    void
+    deallocate(T* p, std::size_t n)
+    {
+        _mm_free(p);
+    }
+};
 
 template <class Type, std::size_t Size>
 class matrix_strassen {
     static_assert((Size & (Size - 1)) == 0, "Should be power of 2!");
 
+    static constexpr std::size_t capacity         = Size * Size;
+    static constexpr std::size_t quarter_capacity = Size * Size / 4;
+    static constexpr std::size_t align            = 64;
+
 public:
     using quarter_type      = matrix_strassen<Type, Size / 2>;
-    using data_type         = std::array<Type, Size * Size>;
-    using quarter_data_type = std::array<Type, Size * Size / 4>;
+    using data_type         = Type*;
+    using array_type        = std::array<Type, capacity>;
+    using quarter_data_type = std::array<Type, quarter_capacity>;
 
     matrix_strassen() = default;
-    matrix_strassen(data_type const& data)
+    matrix_strassen(array_type const& data)
         : a_{get_init(data, 0)}, b_{get_init(data, 1)}, c_{get_init(data, 2)}, d_{get_init(data, 3)}
     {}
 
@@ -78,6 +109,7 @@ public:
     operator*(matrix_strassen const& other) const
     {
         if constexpr (Size >= 64) {
+            static constexpr std::size_t                     ops = 7;
             std::array<std::function<quarter_type(void)>, 7> funcs{
                 {{[&]() -> quarter_type { return (a_ + d_) * (other.a_ + other.d_); }},
                  {[&]() -> quarter_type { return (c_ + d_) * other.a_; }},
@@ -86,10 +118,10 @@ public:
                  {[&]() -> quarter_type { return (a_ + b_) * other.d_; }},
                  {[&]() -> quarter_type { return (c_ - a_) * (other.a_ + other.b_); }},
                  {[&]() -> quarter_type { return (b_ - d_) * (other.c_ + other.d_); }}}};
-            std::array<quarter_type, 7> H;
+            std::array<quarter_type, ops> H;
 
 #pragma omp parallel for
-            for (std::size_t i = 0; i < 7; i++) {
+            for (std::size_t i = 0; i < H.size(); i++) {
                 H[i] = (funcs[i])();
             }
 
@@ -138,12 +170,11 @@ public:
     static matrix_strassen
     get_rand_matrix()
     {
-        std::srand(std::time({}));    // use current time as seed for random generator
-        data_type data_rand;
-        for (auto it{data_rand.begin()}; it != data_rand.end(); it++) {
-            (*it) = static_cast<Type>(std::rand());
-        }
-        return matrix_strassen{data_rand};
+        auto a = quarter_type::get_rand_matrix();
+        auto b = quarter_type::get_rand_matrix();
+        auto c = quarter_type::get_rand_matrix();
+        auto d = quarter_type::get_rand_matrix();
+        return matrix_strassen{a, b, c, d};
     }
 
 private:
@@ -157,7 +188,7 @@ private:
     {}
 
     static constexpr quarter_data_type
-    get_init(data_type const& data, std::size_t k)
+    get_init(array_type const& data, std::size_t k)
     {
         quarter_data_type ret;
         std::size_t       x{};
@@ -187,39 +218,69 @@ private:
 };
 
 template <class Type>
-class matrix_strassen<Type, 2> : public std::array<Type, 4> {
+class matrix_strassen<Type, 2> {
+
+    static constexpr std::size_t size     = 2;
+    static constexpr std::size_t capacity = size * size;
+    static constexpr std::size_t align    = 64;
 
 public:
-    using data_type = std::array<Type, 4>;
+    using data_type  = std::vector<Type, custom_allocator<Type>>;
+    using array_type = std::array<Type, capacity>;
 
-    matrix_strassen() = default;
-    matrix_strassen(const data_type data) : data_type{data} {}
+    matrix_strassen() { data_.reserve(4); }
+    matrix_strassen(array_type const& data)
+    {
+        data_.reserve(4);
+        std::copy(data.begin(), data.end(), data_.begin());
+    }
+    matrix_strassen&
+    operator=(matrix_strassen const& other)
+    {
+        data_.reserve(4);
+        std::copy(other.data_.begin(), other.data_.end(), data_.begin());
+        return *this;
+    }
+    matrix_strassen&
+    operator=(matrix_strassen&& other)
+    {
+        data_.reserve(4);
+        std::copy(other.data_.begin(), other.data_.end(), data_.begin());
+        return *this;
+    }
+    matrix_strassen(matrix_strassen const& val)
+    {
+        data_.reserve(4);
+        std::copy(val.data_.begin(), val.data_.end(), data_.begin());
+    }
+    matrix_strassen(matrix_strassen&& val) : data_{val.data_} {}
+    ~matrix_strassen() {}
 
     auto&
     get(std::size_t row, std::size_t column)
     {
-        return data_type::operator[]((row << 1) + column);
+        return data_[(row << 1) + column];
     }
 
     void
     clear()
     {
-        for (std::size_t i{}; i < data_type::size(); i++) {
-            data_type::operator[](i) = 0;
+        for (std::size_t i{}; i < capacity; i++) {
+            data_[i] = 0;
         }
     }
 
     inline void
     mult(matrix_strassen const& other, matrix_strassen& ret)
     {
-        Type const& a = data_type::operator[](0);
-        Type const& b = data_type::operator[](1);
-        Type const& c = data_type::operator[](2);
-        Type const& d = data_type::operator[](3);
-        Type const& A = other[0];
-        Type const& C = other[1];
-        Type const& B = other[2];
-        Type const& D = other[3];
+        Type const& a = data_[0];
+        Type const& b = data_[1];
+        Type const& c = data_[2];
+        Type const& d = data_[3];
+        Type const& A = other.data_[0];    // NOLINT
+        Type const& C = other.data_[1];    // NOLINT
+        Type const& B = other.data_[2];    // NOLINT
+        Type const& D = other.data_[3];    // NOLINT
 
         const Type t = a * A;
         const Type u = (c - a) * (C - D);
@@ -235,61 +296,58 @@ public:
     inline void
     add(matrix_strassen const& other, matrix_strassen& ret)
     {
-        for (int i{}; i < data_type::size(); i++) {
-            ret[i] = data_type::operator[](i) + other[i];
+        for (int i{}; i < capacity; i++) {
+            ret[i] = data_[i] + other.data_[i];
         }
     }
 
     inline void
     sub(matrix_strassen const& other, matrix_strassen& ret)
     {
-        for (int i{}; i < data_type::size(); i++) {
-            ret[i] = data_type::operator[](i) - other[i];
+        for (int i{}; i < capacity; i++) {
+            ret[i] = data_[i] - other.data_[i];
         }
     }
 
     inline matrix_strassen
     operator*(matrix_strassen const& other) const
     {
-        Type const& a = data_type::operator[](0);
-        Type const& b = data_type::operator[](1);
-        Type const& c = data_type::operator[](2);
-        Type const& d = data_type::operator[](3);
-        Type const& A = other[0];
-        Type const& C = other[1];
-        Type const& B = other[2];
-        Type const& D = other[3];
+        Type const& a = data_[0];
+        Type const& b = data_[1];
+        Type const& c = data_[2];
+        Type const& d = data_[3];
+        Type const& A = other.data_[0];    // NOLINT
+        Type const& C = other.data_[1];    // NOLINT
+        Type const& B = other.data_[2];    // NOLINT
+        Type const& D = other.data_[3];    // NOLINT
 
         const Type t = a * A;
         const Type u = (c - a) * (C - D);
         const Type v = (c + d) * (C - A);
         const Type w = t + (c + d - a) * (A + D - C);
 
-        return matrix_strassen{typename matrix_strassen::data_type{
-            {t + b * B, w + v + (a + b - c - d) * D, w + u + d * (B + C - A - D), w + u + v}}};
+        return matrix_strassen{t + b * B, w + v + (a + b - c - d) * D, w + u + d * (B + C - A - D), w + u + v};
     }
 
     inline matrix_strassen
     operator+(matrix_strassen const& other) const
     {
-        return matrix_strassen{typename matrix_strassen::data_type{
-            {data_type::operator[](0) + other[0], data_type::operator[](1) + other[1],
-             data_type::operator[](2) + other[2], data_type::operator[](3) + other[3]}}};
+        return matrix_strassen{data_[0] + other.data_[0], data_[1] + other.data_[1], data_[2] + other.data_[2],
+                               data_[3] + other.data_[3]};
     }
 
     inline matrix_strassen
     operator-(matrix_strassen const& other) const
     {
-        return matrix_strassen{typename matrix_strassen::data_type{
-            {data_type::operator[](0) - other[0], data_type::operator[](1) - other[1],
-             data_type::operator[](2) - other[2], data_type::operator[](3) - other[3]}}};
+        return matrix_strassen{data_[0] - other.data_[0], data_[1] - other.data_[1], data_[2] - other.data_[2],
+                               data_[3] - other.data_[3]};
     }
 
     static matrix_strassen
     get_rand_matrix()
     {
         std::srand(std::time({}));    // use current time as seed for random generator
-        data_type data_rand;
+        std::array<Type, size * size> data_rand;
         for (auto it{data_rand.begin()}; it != data_rand.end(); it++) {
             (*it) = static_cast<Type>(std::rand());
         }
@@ -297,6 +355,16 @@ public:
     }
 
 private:
+    data_type data_{};
+
+    matrix_strassen(Type const& m_a, Type const& m_b, Type const& m_c, Type const& m_d)
+    {
+        data_.reserve(4);
+        data_[0] = m_a;
+        data_[1] = m_b;
+        data_[2] = m_c;
+        data_[3] = m_d;
+    }
 };
 
 }    // namespace xitren::math
