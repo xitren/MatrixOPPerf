@@ -32,7 +32,8 @@ public:
     template <std::size_t ColumnsOther>
     static void
     mult(matrix_aligned<Type, Rows, ColumnsOther, Alg> const&    a,
-         matrix_aligned<Type, ColumnsOther, Columns, Alg> const& b, matrix_aligned<Type, Rows, Columns, Alg>& c)
+         matrix_aligned<Type, ColumnsOther, Columns, Alg> const& b,
+         matrix_aligned<Type, Rows, Columns, Alg>&               c)
     {
         using Core = xitren::math::gemm_core<Rows, ColumnsOther, Columns, Type, Alg>;
         Core::mult(a.data_, b.data_, c.data_);
@@ -58,6 +59,16 @@ public:
     }
 
     Type* data_{nullptr};
+
+    static std::shared_ptr<matrix_aligned>
+    get_zeros_matrix()
+    {
+        std::shared_ptr<matrix_aligned> ret = std::make_shared<matrix_aligned>();
+        for (std::uint32_t i = 0; i < Rows * Columns; ++i) {
+            ret->data_[i] = 0;
+        }
+        return ret;
+    }
 
 private:
 };

@@ -16,9 +16,10 @@ namespace xitren::math {
 
 enum class optimization { naive, blocked, avx256, avx512, avx512_blocked, openmp_avx512_blocked };
 
-template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns, typename Type,
-          optimization Alg>
+template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns,
+          typename Type, optimization Alg>
 class gemm_core {
+    static_assert(Alg == optimization::naive, "Falling to base gemm!");
 
 public:
     static void
@@ -37,7 +38,8 @@ public:
     }
 };
 
-template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns, typename Type>
+template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns,
+          typename Type>
 class gemm_core<Rows, Other, Columns, Type, optimization::blocked> {
     static constexpr std::uint_fast32_t blocksize = 32;
     static_assert(!(Rows % blocksize), "Should be dividable to blocksize!");
@@ -59,8 +61,8 @@ public:
 
 private:
     static void
-    do_block(const std::uint_fast32_t si, const std::uint_fast32_t sj, const std::uint_fast32_t sk, Type const* a,
-             Type const* b, Type* c)
+    do_block(const std::uint_fast32_t si, const std::uint_fast32_t sj, const std::uint_fast32_t sk,
+             Type const* a, Type const* b, Type* c)
     {
         auto const last_si = si + blocksize;
         auto const last_sj = sj + blocksize;

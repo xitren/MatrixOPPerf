@@ -24,7 +24,7 @@ target_compile_options(${LIBRARY_NAME} INTERFACE -std=c++20 -Wc++20-compat -marc
 target_include_directories(
         ${LIBRARY_NAME} INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>)
 
-target_sources(${LIBRARY_NAME} INTERFACE ${CMAKE_CURRENT_LIST_DIR}/src/operations.cpp)
+target_sources(${LIBRARY_NAME} INTERFACE )
 
 target_link_libraries(${LIBRARY_NAME} INTERFACE)
 

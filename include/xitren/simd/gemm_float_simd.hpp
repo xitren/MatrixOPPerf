@@ -31,7 +31,7 @@ public:
     }
 };
 
-template <std::size_t Rows, std::uint_fast32_t Other, std::size_t Columns>
+template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns>
 class gemm_core<Rows, Other, Columns, float, optimization::avx512> {
     static constexpr std::uint_fast32_t vectorization = 16;
     static_assert(Columns >= vectorization, "Should be greater or equal to blocksize!");
@@ -48,9 +48,9 @@ public:
                 for (std::uint_fast32_t k = 0; k < Other; k++) {
                     auto const var_a = _mm512_broadcastss_ps(_mm_load_ss(a + k + i * Other));
                     auto const var_b = _mm512_load_ps(b + j + k * Columns);
-                    c0               = _mm512_fmadd_ps(var_a, var_b, c0); /* c0 += A[i][k]*B[k][j] */
+                    c0 = _mm512_fmadd_ps(var_a, var_b, c0); /* c0 += A[i][k]*B[k][j] */
                 }
-                _mm512_store_ps(c + current, c0);                         /* C[i][j] = c0 */
+                _mm512_store_ps(c + current, c0);           /* C[i][j] = c0 */
             }
         }
     }
@@ -79,8 +79,8 @@ public:
 
 private:
     static void
-    do_block(const std::uint_fast32_t si, const std::uint_fast32_t sj, const std::uint_fast32_t sk, float const* a,
-             float const* b, float* c)
+    do_block(const std::uint_fast32_t si, const std::uint_fast32_t sj, const std::uint_fast32_t sk,
+             float const* a, float const* b, float* c)
     {
         auto const last_si = si + blocksize;
         auto const last_sj = sj + blocksize;
@@ -93,9 +93,9 @@ private:
                 for (std::uint_fast32_t k = sk; k < last_sk; ++k) {
                     auto const var_a = _mm512_broadcastss_ps(_mm_load_ss(a + i * Other + k));
                     auto const var_b = _mm512_load_ps(b + k * Columns + j);
-                    c0               = _mm512_fmadd_ps(var_a, var_b, c0); /* c0 += A[i][k]*B[k][j] */
+                    c0 = _mm512_fmadd_ps(var_a, var_b, c0); /* c0 += A[i][k]*B[k][j] */
                 }
-                _mm512_store_ps(c + current, c0);                         /* C[i][j] = c0 */
+                _mm512_store_ps(c + current, c0);           /* C[i][j] = c0 */
             }
         }
     }

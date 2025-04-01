@@ -2,7 +2,9 @@
 #include <xitren/math/matrix_alignment.hpp>
 #include <xitren/math/matrix_classic.hpp>
 #include <xitren/math/matrix_strassen.hpp>
-#include <xitren/simd/operations.h++>
+#include <xitren/simd/gemm_double_simd.hpp>
+#include <xitren/simd/gemm_float_simd.hpp>
+#include <xitren/simd/gemm_int8_simd.hpp>
 
 #include <gtest/gtest.h>
 #include <omp.h>
@@ -13,10 +15,10 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <thread>
 #include <vector>
 
 using namespace xitren::math;
-using namespace xitren::simd;
 using namespace std::literals;
 
 using time_type = std::chrono::microseconds;
@@ -56,67 +58,100 @@ matrix_test(std::string name, measurement base, std::function<void(void)> callba
         return cnt;
     });
     if (base.us == 0) {
-        std::cout << name << "\tTime:\t" << calc_time.us << "\tCycles:\t" << calc_time.cycles << "\tx1" << std::endl;
+        std::cout << name << "\tTime:\t" << calc_time.us << "\tCycles:\t" << calc_time.cycles
+                  << "\tx1" << std::endl;
     } else {
         double const in{static_cast<double>(base.cycles) / static_cast<double>(base.us)};
         double const out{static_cast<double>(calc_time.cycles) / static_cast<double>(calc_time.us)};
-        std::cout << name << "\tTime:\t" << calc_time.us << "\tCycles:\t" << calc_time.cycles << "\tx"
-                  << static_cast<int>(out / in) << "." << ((static_cast<int>(out * 10 / in)) % 10) << std::endl;
+        std::cout << name << "\tTime:\t" << calc_time.us << "\tCycles:\t" << calc_time.cycles
+                  << "\tx" << static_cast<int>(out / in) << "."
+                  << ((static_cast<int>(out * 10 / in)) % 10) << std::endl;
     }
     return calc_time;
 }
 
-template <std::size_t Size>
+template <class Type, std::size_t Size, optimization Optim>
+auto
+check(std::string name, auto base)
+{
+    auto Aal = matrix_aligned<Type, Size, Size, Optim>::get_rand_matrix(0., 1.);
+    auto Bal = matrix_aligned<Type, Size, Size, Optim>::get_rand_matrix(0., 1.);
+    auto Cal = matrix_aligned<Type, Size, Size, Optim>::get_zeros_matrix();
+
+    return matrix_test(name, base,
+                       [&]() { matrix_aligned<Type, Size, Size, Optim>::mult(*Aal, *Bal, *Cal); });
+}
+
+template <class Type, std::size_t Size>
 void
 test_sized_matrix()
 {
     constexpr std::size_t size = Size;
-    std::cout << "\nMatrix C = A * B size:\t" << size << std::endl;
+    std::string           str  = "X";
+    if constexpr (std::is_same<Type, double>()) {
+        str = "D  ";
+    }
+    if constexpr (std::is_same<Type, float>()) {
+        str = "F  ";
+    }
+    if constexpr (std::is_same<Type, std::int8_t>()) {
+        str = "I8 ";
+    }
+    auto sz = std::to_string(size);
 
-    auto A = matrix_classic<double, size, size>::get_rand_matrix(0., 1.);
-    auto B = matrix_classic<double, size, size>::get_rand_matrix(0., 1.);
-    auto C = matrix_classic<double, size, size>::get_rand_matrix(0., 1.);
+    auto base = check<Type, Size, optimization::naive>(" "s + sz + "\t" + str + "Naive   ",
+                                                       measurement{0, 0});
+    check<Type, Size, optimization::blocked>(" "s + sz + "\t" + str + "Blocked ", base);
+    check<Type, Size, optimization::avx256>(" "s + sz + "\t" + str + "AVX256  ", base);
+    check<Type, Size, optimization::avx512>(" "s + sz + "\t" + str + "AVX512  ", base);
+    check<Type, Size, optimization::openmp_avx512_blocked>(" "s + sz + "\t" + str + "OpenMP  ",
+                                                           base);
 
-    auto base = matrix_test("Naive   ", measurement{0, 0}, [&]() { A->mult(*B, *C); });
-    matrix_test("Blocked ", base, [&]() { matrix_mult_basic_blocked(*A, *B, *C); });
-
-    auto Aal = matrix_aligned<double, size, size>::get_rand_matrix(0., 1.);
-    auto Bal = matrix_aligned<double, size, size>::get_rand_matrix(0., 1.);
-    auto Cal = matrix_aligned<double, size, size>::get_rand_matrix(0., 1.);
-
-    matrix_test("AVX256  ", base, [&]() { matrix_aligned<double, size, size>::mult_256(*Aal, *Bal, *Cal); });
-    matrix_test("AVX512  ", base, [&]() { matrix_aligned<double, size, size>::mult_512(*Aal, *Bal, *Cal); });
-    matrix_test("Unrolled", base, [&]() { matrix_aligned<double, size, size>::mult_unrolled(*Aal, *Bal, *Cal); });
-    matrix_test("OpenMP  ", base, [&]() { matrix_aligned<double, size, size>::mult_openmp(*Aal, *Bal, *Cal); });
-
-    using loc_type_eigen = Eigen::MatrixXd;
-    auto   mAe           = loc_type_eigen::Random(size, size);
-    auto   mBe           = loc_type_eigen::Random(size, size);
-    double it{};
-    matrix_test("Eigen   ", base, [&]() {
-        auto mCe = mAe * mBe;
-        it += mCe(0, 0);
-    });
-
-    if constexpr (Size < 256) {
-        static auto Ast = matrix_strassen<double, size>::get_rand_matrix();
-        static auto Bst = matrix_strassen<double, size>::get_rand_matrix();
-        static auto Cst = matrix_strassen<double, size>::get_rand_matrix();
-        matrix_test("Strassen", base, [&]() { Cst = Ast * Bst; });
+    {
+        using loc_type_eigen = Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic>;
+        auto   mAe           = loc_type_eigen::Random(size, size);
+        auto   mBe           = loc_type_eigen::Random(size, size);
+        double it{};
+        matrix_test(" "s + sz + "\t" + str + "Eigen   ", base, [&]() {
+            auto mCe = mAe * mBe;
+            it += mCe(0, 0);
+        });
     }
 }
 
-TEST(matrix_perf_test, usual)
+TEST(matrix_perf_test, type)
 {
-    test_sized_matrix<32>();
-    test_sized_matrix<64>();
-    test_sized_matrix<128>();
-    test_sized_matrix<256>();
-    test_sized_matrix<512>();
-    test_sized_matrix<1024>();
-    test_sized_matrix<2048>();
-    test_sized_matrix<4096>();
-    test_sized_matrix<8192>();
-    test_sized_matrix<16384>();
-    test_sized_matrix<32768>();
+    test_sized_matrix<float, 32>();
+    test_sized_matrix<double, 32>();
+    test_sized_matrix<std::int8_t, 64>();
+    test_sized_matrix<float, 64>();
+    test_sized_matrix<double, 64>();
+    test_sized_matrix<std::int8_t, 128>();
+    test_sized_matrix<float, 128>();
+    test_sized_matrix<double, 128>();
+    test_sized_matrix<std::int8_t, 256>();
+    test_sized_matrix<float, 256>();
+    test_sized_matrix<double, 256>();
+    test_sized_matrix<std::int8_t, 512>();
+    test_sized_matrix<float, 512>();
+    test_sized_matrix<double, 512>();
+    test_sized_matrix<std::int8_t, 1024>();
+    test_sized_matrix<float, 1024>();
+    test_sized_matrix<double, 1024>();
+    test_sized_matrix<std::int8_t, 2048>();
+    test_sized_matrix<float, 2048>();
+    test_sized_matrix<double, 2048>();
+}
+
+TEST(matrix_perf_test, type_long)
+{
+    test_sized_matrix<std::int8_t, 4096>();
+    test_sized_matrix<float, 4096>();
+    test_sized_matrix<double, 4096>();
+    test_sized_matrix<std::int8_t, 8192>();
+    test_sized_matrix<float, 8192>();
+    test_sized_matrix<double, 8192>();
+    test_sized_matrix<std::int8_t, 16384>();
+    test_sized_matrix<float, 16384>();
+    test_sized_matrix<double, 16384>();
 }
