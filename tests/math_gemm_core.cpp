@@ -23,10 +23,12 @@ print(matrix_aligned<Type, Rows, Columns, Alg>& rr)
     }
 }
 
-template <class Type, std::size_t Rows, std::size_t ColumnsOther, std::size_t Columns, optimization Alg>
+template <class Type, std::size_t Rows, std::size_t ColumnsOther, std::size_t Columns,
+          optimization Alg>
 void
-check_with_eigen(matrix_aligned<Type, Rows, ColumnsOther, Alg>& a, matrix_aligned<Type, ColumnsOther, Columns, Alg>& b,
-                 matrix_aligned<Type, Rows, Columns, Alg>& c)
+check_with_eigen(matrix_aligned<Type, Rows, ColumnsOther, Alg>&    a,
+                 matrix_aligned<Type, ColumnsOther, Columns, Alg>& b,
+                 matrix_aligned<Type, Rows, Columns, Alg>&         c)
 {
     using loc_type_eigen = Eigen::MatrixXd;
     loc_type_eigen mAe{};
@@ -66,7 +68,7 @@ check_with_eigen(matrix_aligned<Type, Rows, ColumnsOther, Alg>& a, matrix_aligne
     }
 }
 
-TEST(dgemm_core, naive_quad_2)
+TEST(gemm_core, naive_quad_2)
 {
     constexpr std::size_t  size  = 2;
     constexpr optimization optim = optimization::naive;
@@ -86,7 +88,7 @@ TEST(dgemm_core, naive_quad_2)
     check_with_eigen(*Aal, *Bal, *Cal);
 }
 
-TEST(dgemm_core, naive_2_4_2)
+TEST(gemm_core, naive_2_4_2)
 {
     constexpr std::size_t  sizeRows         = 2;
     constexpr std::size_t  sizeOtherColumns = 4;
@@ -94,7 +96,8 @@ TEST(dgemm_core, naive_2_4_2)
     constexpr optimization optim            = optimization::naive;
 
     auto Aal = matrix_aligned<double, sizeRows, sizeOtherColumns, optim>::get_rand_matrix(0., 1.);
-    auto Bal = matrix_aligned<double, sizeOtherColumns, sizeColumns, optim>::get_rand_matrix(0., 1.);
+    auto Bal
+        = matrix_aligned<double, sizeOtherColumns, sizeColumns, optim>::get_rand_matrix(0., 1.);
     auto Cal = matrix_aligned<double, sizeRows, sizeColumns, optim>::get_rand_matrix(0., 1.);
 
     for (std::size_t i = 0; i < sizeRows; i++) {
@@ -108,7 +111,7 @@ TEST(dgemm_core, naive_2_4_2)
     check_with_eigen(*Aal, *Bal, *Cal);
 }
 
-TEST(dgemm_core, block_32_64_32)
+TEST(gemm_core, block_32_64_32)
 {
     constexpr std::size_t  sizeRows         = 32;
     constexpr std::size_t  sizeOtherColumns = 64;
@@ -116,7 +119,8 @@ TEST(dgemm_core, block_32_64_32)
     constexpr optimization optim            = optimization::blocked;
 
     auto Aal = matrix_aligned<double, sizeRows, sizeOtherColumns, optim>::get_rand_matrix(0., 1.);
-    auto Bal = matrix_aligned<double, sizeOtherColumns, sizeColumns, optim>::get_rand_matrix(0., 1.);
+    auto Bal
+        = matrix_aligned<double, sizeOtherColumns, sizeColumns, optim>::get_rand_matrix(0., 1.);
     auto Cal = matrix_aligned<double, sizeRows, sizeColumns, optim>::get_rand_matrix(0., 1.);
 
     for (std::size_t i = 0; i < sizeRows; i++) {

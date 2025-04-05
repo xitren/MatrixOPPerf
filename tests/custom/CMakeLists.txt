@@ -14,6 +14,6 @@ add_executable("Perf_Ofast" "matrix_perf_test.cpp")
 target_compile_features("Perf_Ofast" PUBLIC cxx_std_20)
 target_compile_options("Perf_Ofast" PRIVATE -Wall -Wextra -Wpedantic -Wc++20-compat -Wno-format-security
         -Woverloaded-virtual -Wsuggest-override -fopenmp -march=native
-        -Ofast -fargument-noalias)
+        -Ofast)
 target_link_libraries("Perf_Ofast" PRIVATE ${LIBRARY_NAME} GTest::gtest GTest::GTest Eigen3::Eigen OpenMP::OpenMP_CXX -pthread)
 gtest_discover_tests("Perf_Ofast" WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
