@@ -19,6 +19,15 @@ namespace xitren::math {
 
 template <class Type, std::size_t Rows, std::size_t Columns, xitren::math::optimization Alg>
 class matrix_aligned {
+    using Core = xitren::math::gemm_core<Rows, Columns, Type, Alg>;
+
+    static_assert(noexcept(Core::template mult<32>(nullptr, nullptr, nullptr)));
+    static_assert(noexcept(Core::add(nullptr, nullptr, nullptr)));
+    static_assert(noexcept(Core::sub(nullptr, nullptr, nullptr)));
+    static_assert(noexcept(Core::transpose(nullptr, nullptr)));
+    static_assert(noexcept(Core::trace(nullptr)));
+    static_assert(noexcept(Core::min(nullptr)));
+    static_assert(noexcept(Core::max(nullptr)));
 
 public:
     matrix_aligned()
@@ -35,8 +44,7 @@ public:
          matrix_aligned<Type, ColumnsOther, Columns, Alg> const& b,
          matrix_aligned<Type, Rows, Columns, Alg>&               c)
     {
-        using Core = xitren::math::gemm_core<Rows, ColumnsOther, Columns, Type, Alg>;
-        Core::mult(a.data_, b.data_, c.data_);
+        Core::template mult<ColumnsOther>(a.data_, b.data_, c.data_);
     }
 
     auto&

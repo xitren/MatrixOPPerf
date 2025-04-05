@@ -24,6 +24,7 @@ find_package(OpenMP REQUIRED)
 
 include(GoogleTest)
 add_subdirectory(custom)
+add_subdirectory(cuda)
 
 file(GLOB TESTS *.cpp)
 

@@ -5,15 +5,24 @@
 
 namespace xitren::math {
 
-template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns>
-class gemm_core<Rows, Other, Columns, std::int8_t, optimization::avx256> {
+template <std::uint_fast32_t Rows, std::uint_fast32_t Columns>
+class gemm_core<Rows, Columns, std::int8_t, optimization::avx256>
+    : gemm_core<Rows, Columns, std::int8_t, optimization::naive> {
     static constexpr std::uint_fast32_t vectorization = 32;
     static_assert(Columns >= vectorization, "Should be greater or equal to blocksize!");
     static_assert(!(Columns % vectorization), "Should be dividable to blocksize!");
 
 public:
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::add;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::sub;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::transpose;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::trace;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::min;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::max;
+
+    template <std::uint_fast32_t Other>
     static void
-    mult(std::int8_t const* a, std::int8_t const* b, std::int8_t* c)
+    mult(std::int8_t const* a, std::int8_t const* b, std::int8_t* c) noexcept
     {
         for (std::uint_fast32_t i = 0; i < Rows; i++) {
             for (std::uint_fast32_t j = 0; j < Columns; j += vectorization) {
@@ -38,15 +47,24 @@ public:
     }
 };
 
-template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns>
-class gemm_core<Rows, Other, Columns, std::int8_t, optimization::avx512> {
+template <std::uint_fast32_t Rows, std::uint_fast32_t Columns>
+class gemm_core<Rows, Columns, std::int8_t, optimization::avx512>
+    : gemm_core<Rows, Columns, std::int8_t, optimization::naive> {
     static constexpr std::uint_fast32_t vectorization = 64;
     static_assert(Columns >= vectorization, "Should be greater or equal to blocksize!");
     static_assert(!(Columns % vectorization), "Should be dividable to blocksize!");
 
 public:
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::add;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::sub;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::transpose;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::trace;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::min;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::max;
+
+    template <std::uint_fast32_t Other>
     static void
-    mult(std::int8_t const* a, std::int8_t const* b, std::int8_t* c)
+    mult(std::int8_t const* a, std::int8_t const* b, std::int8_t* c) noexcept
     {
         for (std::uint_fast32_t i = 0; i < Rows; i++) {
             for (std::uint_fast32_t j = 0; j < Columns; j += vectorization) {
@@ -72,31 +90,41 @@ public:
     }
 };
 
-template <std::uint_fast32_t Rows, std::uint_fast32_t Other, std::uint_fast32_t Columns>
-class gemm_core<Rows, Other, Columns, std::int8_t, optimization::openmp_avx512_blocked> {
+template <std::uint_fast32_t Rows, std::uint_fast32_t Columns>
+class gemm_core<Rows, Columns, std::int8_t, optimization::openmp_avx512_blocked>
+    : gemm_core<Rows, Columns, std::int8_t, optimization::naive> {
     static constexpr std::uint_fast32_t blocksize     = 64;
     static constexpr std::uint_fast32_t vectorization = 64;
     static_assert(!(Rows % blocksize), "Should be dividable to blocksize!");
     static_assert(!(Columns % blocksize), "Should be dividable to blocksize!");
 
 public:
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::add;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::sub;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::transpose;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::trace;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::min;
+    using gemm_core<Rows, Columns, std::int8_t, optimization::naive>::max;
+
+    template <std::uint_fast32_t Other>
     static void
-    mult(std::int8_t const* a, std::int8_t const* b, std::int8_t* c)
+    mult(std::int8_t const* a, std::int8_t const* b, std::int8_t* c) noexcept
     {
 #pragma omp parallel for
         for (std::uint_fast32_t si = 0; si < Rows; si += blocksize) {
             for (std::uint_fast32_t sj = 0; sj < Columns; sj += blocksize) {
                 for (std::uint_fast32_t sk = 0; sk < Other; sk += blocksize) {
-                    do_block(si, sj, sk, a, b, c);
+                    do_block<Other>(si, sj, sk, a, b, c);
                 }
             }
         }
     }
 
 private:
+    template <std::uint_fast32_t Other>
     static void
     do_block(const std::uint_fast32_t si, const std::uint_fast32_t sj, const std::uint_fast32_t sk,
-             std::int8_t const* a, std::int8_t const* b, std::int8_t* c)
+             std::int8_t const* a, std::int8_t const* b, std::int8_t* c) noexcept
     {
         auto const last_si = si + blocksize;
         auto const last_sj = sj + blocksize;
