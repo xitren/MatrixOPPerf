@@ -87,7 +87,7 @@ void
 test_sized_matrix()
 {
     constexpr std::size_t size = Size;
-    std::string           str  = "X";
+    std::string           str  = "X ";
     if constexpr (std::is_same<Type, double>()) {
         str = "D  ";
     }
