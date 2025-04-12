@@ -17,6 +17,9 @@
 
 namespace xitren::math {
 
+// The code snippet defines a C++ template class named `matrix_aligned` within the namespace
+// `xitren::math`. This class is a matrix representation with aligned memory allocation for
+// optimized matrix operations.
 template <class Type, std::size_t Rows, std::size_t Columns, xitren::math::optimization Alg>
 class matrix_aligned {
     using Core = xitren::math::gemm_core<Rows, Columns, Type, Alg>;

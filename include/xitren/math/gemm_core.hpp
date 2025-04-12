@@ -16,13 +16,22 @@
 
 namespace xitren::math {
 
+// The `enum class optimization` defines an enumeration type that represents different optimization
+// strategies for matrix multiplication algorithms. The enum class `optimization` includes the
+// following options:
 enum class optimization { naive, blocked, avx256, avx512, avx512_blocked, openmp_avx512_blocked };
 
+// The `gemm_core` class template in the provided code is implementing a generic matrix
+// multiplication (GEMM) algorithm for matrices of fixed size specified by the template parameters
+// `Rows` and `Columns`. It supports different optimization strategies specified by the
+// `optimization` enum class.
 template <std::uint_fast32_t Rows, std::uint_fast32_t Columns, typename Type, optimization Alg>
 class gemm_core {
     static_assert(Alg == optimization::naive, "Falling to base gemm!");
 
 public:
+    // The `mult` function in the provided code is performing matrix multiplication for matrices of
+    // fixed size specified by the template parameters `Rows` and `Columns`.
     template <std::uint_fast32_t Other>
     static void
     mult(Type const* a, Type const* b, Type* c) noexcept
@@ -39,6 +48,8 @@ public:
         }
     }
 
+    // The `add` function is performing element-wise addition of two matrices represented by arrays
+    // `a` and `b`, and storing the result in the array `c`.
     static void
     add(Type const* a, Type const* b, Type* c) noexcept
     {
@@ -51,6 +62,8 @@ public:
         }
     }
 
+    // The `sub` function is performing element-wise subtraction of two matrices represented by
+    // arrays `a` and `b`, and storing the result in the array `c`.
     static void
     sub(Type const* a, Type const* b, Type* c) noexcept
     {
@@ -63,6 +76,8 @@ public:
         }
     }
 
+    // The `transpose` function is responsible for transposing a matrix represented by the input
+    // array `a` and storing the transposed matrix in the output array `c`.
     static void
     transpose(Type const* a, Type* c) noexcept
     {
@@ -74,6 +89,8 @@ public:
         }
     }
 
+    // The `static Type trace(Type const* a) noexcept` function in the provided code is calculating
+    // the trace of a square matrix represented by the input array `a`.
     static Type
     trace(Type const* a) noexcept
     {
@@ -86,6 +103,8 @@ public:
         return ret;
     }
 
+    // The `static Type min(Type const* a) noexcept` function is calculating the minimum value
+    // within a matrix represented by the input array `a`.
     static Type
     min(Type const* a) noexcept
     {
@@ -100,6 +119,8 @@ public:
         return ret;
     }
 
+    // The `static Type max(Type const* a) noexcept` function is calculating the maximum value
+    // within a matrix represented by the input array `a`.
     static Type
     max(Type const* a) noexcept
     {
@@ -115,6 +136,8 @@ public:
     }
 };
 
+// This code snippet is defining a specialization of the `gemm_core` class template for the
+// optimization strategy `optimization::blocked`.
 template <std::uint_fast32_t Rows, std::uint_fast32_t Columns, typename Type>
 class gemm_core<Rows, Columns, Type, optimization::blocked>
     : gemm_core<Rows, Columns, Type, optimization::naive> {

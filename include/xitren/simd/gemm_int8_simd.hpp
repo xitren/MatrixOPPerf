@@ -5,6 +5,8 @@
 
 namespace xitren::math {
 
+// This code snippet is defining a specialization of the `gemm_core` class template for the
+// optimization strategy `optimization::avx256`.
 template <std::uint_fast32_t Rows, std::uint_fast32_t Columns>
 class gemm_core<Rows, Columns, std::int8_t, optimization::avx256>
     : gemm_core<Rows, Columns, std::int8_t, optimization::naive> {
@@ -47,6 +49,8 @@ public:
     }
 };
 
+// This code snippet is defining a specialization of the `gemm_core` class template for the
+// optimization strategy `optimization::avx512`.
 template <std::uint_fast32_t Rows, std::uint_fast32_t Columns>
 class gemm_core<Rows, Columns, std::int8_t, optimization::avx512>
     : gemm_core<Rows, Columns, std::int8_t, optimization::naive> {
@@ -90,6 +94,8 @@ public:
     }
 };
 
+// This code snippet is defining a specialization of the `gemm_core` class template for the
+// optimization strategy `optimization::openmp_avx512_blocked`.
 template <std::uint_fast32_t Rows, std::uint_fast32_t Columns>
 class gemm_core<Rows, Columns, std::int8_t, optimization::openmp_avx512_blocked>
     : gemm_core<Rows, Columns, std::int8_t, optimization::naive> {

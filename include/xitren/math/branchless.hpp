@@ -5,6 +5,9 @@
 
 namespace xitren::math {
 
+// The `branchless_select` function is a branchless way to select between two values `a` and `b`
+// based on the value of the `compare` parameter.Instead of using traditionalconditional
+// statements(if - else), it uses bitwise operations to perform the selection without branching.
 template <class Type>
 static inline Type&
 branchless_select(int compare, Type& a, Type& b)
