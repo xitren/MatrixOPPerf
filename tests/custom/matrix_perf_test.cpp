@@ -60,17 +60,19 @@ matrix_test(std::string format, std::string optim, std::size_t size, measurement
         return cnt;
     });
     auto gops      = (3 * size * size * size * calc_time.cycles) / (calc_time.us * 1'000);
-    outfile << format << ";" << optim << ";" << calc_time.us << ";" << calc_time.cycles << ";"
-            << gops << std::endl;
+    outfile << format << ";" << optim << ";" << size << ";" << calc_time.us << ";"
+            << calc_time.cycles << ";" << gops << std::endl;
     if (base.us == 0) {
-        std::cout << format << "\t" << optim << "\tTime:\t" << calc_time.us << "\tCycles:\t"
-                  << calc_time.cycles << "\tGIPS:\t" << gops << "\tx1" << std::endl;
+        std::cout << format << "\t" << size << "\t" << optim << "\tTime:\t" << calc_time.us
+                  << "\tCycles:\t" << calc_time.cycles << "\tGIPS:\t" << gops << "\tx1"
+                  << std::endl;
     } else {
         double const in{static_cast<double>(base.cycles) / static_cast<double>(base.us)};
         double const out{static_cast<double>(calc_time.cycles) / static_cast<double>(calc_time.us)};
-        std::cout << format << "\t" << optim << "\tTime:\t" << calc_time.us << "\tCycles:\t"
-                  << calc_time.cycles << "\tGIPS:\t" << gops << "\tx" << static_cast<int>(out / in)
-                  << "." << ((static_cast<int>(out * 10 / in)) % 10) << std::endl;
+        std::cout << format << "\t" << size << "\t" << optim << "\tTime:\t" << calc_time.us
+                  << "\tCycles:\t" << calc_time.cycles << "\tGIPS:\t" << gops << "\tx"
+                  << static_cast<int>(out / in) << "." << ((static_cast<int>(out * 10 / in)) % 10)
+                  << std::endl;
     }
     return calc_time;
 }
@@ -104,18 +106,18 @@ test_sized_matrix(std::ofstream& outfile)
     }
     auto sz = std::to_string(size);
 
-    auto base = check<Type, Size, optimization::naive>(sz, "Naive", measurement{0, 0}, outfile);
-    check<Type, Size, optimization::blocked>(sz, "Blocked", base, outfile);
-    check<Type, Size, optimization::avx256>(sz, "AVX256", base, outfile);
-    check<Type, Size, optimization::avx512>(sz, "AVX512", base, outfile);
-    check<Type, Size, optimization::openmp_avx512_blocked>(sz, "OpenMP", base, outfile);
+    auto base = check<Type, Size, optimization::naive>(str, "Naive", measurement{0, 0}, outfile);
+    check<Type, Size, optimization::blocked>(str, "Blocked", base, outfile);
+    check<Type, Size, optimization::avx256>(str, "AVX256", base, outfile);
+    check<Type, Size, optimization::avx512>(str, "AVX512", base, outfile);
+    check<Type, Size, optimization::openmp_avx512_blocked>(str, "OpenMP", base, outfile);
 
     {
         using loc_type_eigen = Eigen::Matrix<Type, Eigen::Dynamic, Eigen::Dynamic>;
         auto   mAe           = loc_type_eigen::Random(size, size);
         auto   mBe           = loc_type_eigen::Random(size, size);
         double it{};
-        matrix_test(sz, "Eigen", Size, base, outfile, [&]() {
+        matrix_test(str, "Eigen", Size, base, outfile, [&]() {
             auto mCe = mAe * mBe;
             it += mCe(0, 0);
         });
@@ -148,7 +150,7 @@ check_line(std::ofstream& outfile)
 
 TEST(matrix_perf_test, type)
 {
-    outfile << "Format;Optimization;Time (us);Cycles;GFLOPS/GIPS\n"s;
+    outfile << "Format;Optimization;Matrix size;Time (us);Cycles;GFLOPS/GIPS\n"s;
 
     check_line<std::int8_t>(outfile);
     check_line<float>(outfile);
